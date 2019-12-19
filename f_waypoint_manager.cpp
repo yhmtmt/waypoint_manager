@@ -1,46 +1,30 @@
 // Copyright(c) 2016 Yohei Matsumoto, All right reserved. 
 
-// f_wp_manager.cpp is free software: you can redistribute it and/or modify
+// f_waypoint_manager.cpp is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
 // the Free Software Foundation, either version 3 of the License, or
 // (at your option) any later version.
 
-// f_wp_manager.cpp is distributed in the hope that it will be useful,
+// f_waypoint_manager.cpp is distributed in the hope that it will be useful,
 // but WITHOUT ANY WARRANTY; without even the implied warranty of
 // MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with f_wp_manager.cpp.  If not, see <http://www.gnu.org/licenses/>. 
+// along with f_waypoint_manager.cpp.  If not, see <http://www.gnu.org/licenses/>. 
 
-#include <cstdio>
-#include <cstring>
-#include <cmath>
+#include "f_waypoint_manager.hpp"
+DEFINE_FILTER(f_waypoint_manager);
 
-#include <iostream>
-#include <fstream>
-#include <vector>
-#include <list>
-#include <map>
-
-using namespace std;
-
-#include "../util/c_clock.h"
-
-#include <opencv2/opencv.hpp>
-using namespace cv;
-
-#include "f_wp_manager.h"
-
-const char * f_wp_manager::str_cmd[cmd_null] = {
-	"ins", "ers", "save", "load", "next", "prev"
+const char * f_waypoint_manager::str_cmd[cmd_null] = {
+  "ins", "ers", "save", "load", "next", "prev"
 };
 
-f_wp_manager::f_wp_manager(const char * name) :f_base(name),
-					       m_aws1_waypoint_file_version("#aws1_waypoint_v_0.00"), id(0),
+f_waypoint_manager::f_waypoint_manager(const char * name) :f_base(name),
+							   m_aws1_waypoint_file_version("#aws1_waypoint_v_0.00"), id(0),
 
-					       m_state(NULL), m_wp(NULL), cmd(cmd_null),
-					       lat(0.f), lon(0.f), rarv(10.f), vel(10.f)
+							   m_state(NULL), m_wp(NULL), cmd(cmd_null),
+							   lat(0.f), lon(0.f), rarv(10.f), vel(10.f)
 {
   path[0] = '\0';
   register_fpar("path", path, 1024, "Path to the route file.");
@@ -55,28 +39,28 @@ f_wp_manager::f_wp_manager(const char * name) :f_base(name),
   register_fpar("vel", &vel, "Velocity for navigation.");
 }
 
-f_wp_manager::~f_wp_manager()
+f_waypoint_manager::~f_waypoint_manager()
 {
 }
 
-bool f_wp_manager::init_run()
+bool f_waypoint_manager::init_run()
 {
-	return true;
+  return true;
 }
 
-void f_wp_manager::destroy_run()
+void f_waypoint_manager::destroy_run()
 {
 }
 
-bool f_wp_manager::proc()
+bool f_waypoint_manager::proc()
 {
   float cog, sog;
   long long t = 0;
   m_state->get_velocity(t, cog, sog);
-  Mat Rorg;
-  Point3d Porg;
-  Rorg = m_state->get_enu_rotation(t);
-  m_state->get_position_ecef(t, Porg.x, Porg.y, Porg.z);
+  double Rorg[9];
+  double x, y, z;
+  m_state->get_enu_rotation(t, Rorg);
+  m_state->get_position_ecef(t, x, y, z);
   
   // process command
   m_wp->lock();
@@ -122,7 +106,7 @@ bool f_wp_manager::proc()
   m_wp->begin();
   for(;!m_wp->is_end(); m_wp->next()){
     s_wp & wp = m_wp->cur();
-    wp.update_pos_rel(Rorg, Porg.x, Porg.y, Porg.z);	 
+    wp.update_pos_rel(Rorg, x, y, z);	 
     wp = m_wp->cur();
   }
   
@@ -140,8 +124,8 @@ bool f_wp_manager::proc()
       return true;
     }
     s_wp & wp_prev = m_wp->get_prev_wp();
-    wp.update_pos_rel(Rorg, Porg.x, Porg.y, Porg.z);
-    wp_prev.update_pos_rel(Rorg, Porg.x, Porg.y, Porg.z);
+    wp.update_pos_rel(Rorg, x, y, z);
+    wp_prev.update_pos_rel(Rorg, x, y, z);
     
     float xdiff = 0.0;
     if(wp_prev.rx != wp.rx && wp_prev.ry != wp.ry){
@@ -183,25 +167,25 @@ bool f_wp_manager::proc()
 	rx_tgt = (float)(siawp * wpx + wp_prev.rx);
 	ry_tgt = (float) (siawp * wpy + wp_prev.ry);
       }
-      }
-      
-      float ctgt = (float)(atan2(rx_tgt, ry_tgt) * 180. / PI);
-      float cdiff = (float)(ctgt - cog);
-      if(abs(cdiff) > 180.){
-	if(cdiff < 0)
-	  cdiff += 360.;
-	else
-	  cdiff -= 360.;
-      }
-      
-      m_wp->set_diff(d, cdiff, xdiff);     
     }
+      
+    float ctgt = (float)(atan2(rx_tgt, ry_tgt) * 180. / PI);
+    float cdiff = (float)(ctgt - cog);
+    if(abs(cdiff) > 180.){
+      if(cdiff < 0)
+	cdiff += 360.;
+      else
+	cdiff -= 360.;
+    }
+      
+    m_wp->set_diff(d, cdiff, xdiff);     
+  }
     
-    m_wp->unlock();
-    return true;
+  m_wp->unlock();
+  return true;
 }
 
-void f_wp_manager::load(const int id)
+void f_waypoint_manager::load(const int id)
 {
   char fname[1024];
   snprintf(fname, 1024, "%s/%03d.rt", path, id);
@@ -246,28 +230,28 @@ void f_wp_manager::load(const int id)
   fclose(pf);
 }
  
- void f_wp_manager::save(const int id)
- {
-   char fname[1024];
-   snprintf(fname, 1024, "%s/%03d.rt", path, id);
-   FILE * pf = fopen(fname, "w");
+void f_waypoint_manager::save(const int id)
+{
+  char fname[1024];
+  snprintf(fname, 1024, "%s/%03d.rt", path, id);
+  FILE * pf = fopen(fname, "w");
    
-   if (pf){
-     fprintf(pf, "%s\n", m_aws1_waypoint_file_version);
+  if (pf){
+    fprintf(pf, "%s\n", m_aws1_waypoint_file_version);
      
-     fprintf(pf, "%d\n", m_wp->get_num_wps());
+    fprintf(pf, "%d\n", m_wp->get_num_wps());
      
-     int i = 0;
-     for (m_wp->begin(); !m_wp->is_end(); m_wp->next()){
-       s_wp & wp = m_wp->cur();
-       fprintf(pf, "%d %013.8f %013.8f %03.1f\n", i,
-	       (float)(wp.lat * (180 / PI)),
-	       (float)(wp.lon * (180 / PI)), wp.rarv);
-       i++;
-     }
-     fclose(pf);
-   }
-   else{
-     cerr << "Failed to save route file " << fname << "." << endl;
-   }
- }
+    int i = 0;
+    for (m_wp->begin(); !m_wp->is_end(); m_wp->next()){
+      s_wp & wp = m_wp->cur();
+      fprintf(pf, "%d %013.8f %013.8f %03.1f\n", i,
+	      (float)(wp.lat * (180 / PI)),
+	      (float)(wp.lon * (180 / PI)), wp.rarv);
+      i++;
+    }
+    fclose(pf);
+  }
+  else{
+    cerr << "Failed to save route file " << fname << "." << endl;
+  }
+}
