@@ -187,8 +187,8 @@ bool f_waypoint_manager::proc()
 
 void f_waypoint_manager::load(const int id)
 {
-  char fname[1024];
-  snprintf(fname, 1024, "%s/%03d.rt", path, id);
+  char fname[2048];
+  snprintf(fname, 2048, "%s/%03d.rt", path, id);
   FILE * pf = fopen(fname, "r");
   
   if (pf){
@@ -232,8 +232,8 @@ void f_waypoint_manager::load(const int id)
  
 void f_waypoint_manager::save(const int id)
 {
-  char fname[1024];
-  snprintf(fname, 1024, "%s/%03d.rt", path, id);
+  char fname[2048];
+  snprintf(fname, 2048, "%s/%03d.rt", path, id);
   FILE * pf = fopen(fname, "w");
    
   if (pf){
