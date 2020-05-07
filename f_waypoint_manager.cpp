@@ -119,7 +119,7 @@ bool f_waypoint_manager::proc()
     if(d < wp.rarv){// arrived
       wp.set_arrival_time(get_time());
       m_wp->set_next_wp();
-      m_wp->set_diff(d, 0, 0);
+      m_wp->set_target_course(d, 0, 0);
       m_wp->unlock();
       return true;
     }
@@ -170,15 +170,13 @@ bool f_waypoint_manager::proc()
     }
       
     float ctgt = (float)(atan2(rx_tgt, ry_tgt) * 180. / PI);
-    float cdiff = (float)(ctgt - cog);
-    if(abs(cdiff) > 180.){
-      if(cdiff < 0)
-	cdiff += 360.;
-      else
-	cdiff -= 360.;
+    if(ctgt != ctgt){
+      cerr << "ctgt hit nan" << endl;
+      cerr << "rx,ry tgt = " << rx_tgt << "," << ry_tgt << endl;
+      return false;
     }
-      
-    m_wp->set_diff(d, cdiff, xdiff);     
+    
+    m_wp->set_target_course(d, ctgt, xdiff);     
   }
     
   m_wp->unlock();
